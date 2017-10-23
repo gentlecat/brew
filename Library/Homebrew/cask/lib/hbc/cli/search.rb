@@ -43,12 +43,10 @@ module Hbc
         search_term = arguments.join(" ")
         search_regexp = extract_regexp arguments.first
         all_tokens = CLI.nice_listing(Hbc.all_tokens)
-        all_names = {}
+        all_names = Hash.new { |h, k| h[k] = Set.new }
         Hbc.all.each do |cask|
-          # FIXME(gentlecat): some casks might have same names, so we need to
-          # store multiple tokens for a name.
           cask.name.each do |n|
-            all_names[n] = cask.token
+            all_names[n] = all_names[n].merge(cask.name)
           end
         end
 
