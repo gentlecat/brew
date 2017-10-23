@@ -43,29 +43,41 @@ module Hbc
         search_term = arguments.join(" ")
         search_regexp = extract_regexp arguments.first
         all_tokens = CLI.nice_listing(Hbc.all_tokens)
+        all_names = {}
+        Hbc.all.each do |cask|
+          # FIXME(gentlecat): some casks might have same names, so we need to
+          # store multiple tokens for a name.
+          cask.name.each do |n|
+            all_names[n] = cask.token
+          end
+        end
+
         if search_regexp
           search_term = arguments.first
           partial_matches = all_tokens.grep(/#{search_regexp}/i)
+          name_matches = all_names.keys.grep(/#{search_regexp}/i)
         else
           simplified_tokens = all_tokens.map { |t| t.sub(%r{^.*\/}, "").gsub(/[^a-z0-9]+/i, "") }
           simplified_search_term = search_term.sub(/\.rb$/i, "").gsub(/[^a-z0-9]+/i, "")
           exact_match = simplified_tokens.grep(/^#{simplified_search_term}$/i) { |t| all_tokens[simplified_tokens.index(t)] }.first
           partial_matches = simplified_tokens.grep(/#{simplified_search_term}/i) { |t| all_tokens[simplified_tokens.index(t)] }
           partial_matches.delete(exact_match)
+          name_matches = all_names.keys.grep(/#{simplified_search_term}/i)
+          # TODO(gentlecat): Should probably delete exact and partial matches from *name* results.
         end
 
         remote_matches = search_remote(search_term)
 
-        [exact_match, partial_matches, remote_matches, search_term]
+        [exact_match, partial_matches, name_matches, remote_matches, search_term]
       end
 
-      def self.render_results(exact_match, partial_matches, remote_matches, search_term)
+      def self.render_results(exact_match, partial_matches, name_matches, remote_matches, search_term)
         unless $stdout.tty?
-          puts [*exact_match, *partial_matches, *remote_matches]
+          puts [*exact_match, *partial_matches, *name_matches, *remote_matches]
           return
         end
 
-        if !exact_match && partial_matches.empty?
+        if !exact_match && partial_matches.empty? && name_matches.empty?
           puts "No Cask found for \"#{search_term}\"."
           return
         end
@@ -81,6 +93,16 @@ module Hbc
             ohai "Partial Matches"
           end
           puts Formatter.columns(partial_matches.map(&method(:highlight_installed)))
+        end
+
+        unless name_matches.empty?
+          if extract_regexp search_term
+            ohai "Name Regexp Matches"
+          else
+            ohai "Name Matches"
+          end
+          # TODO(gentlecat): Display cask's tokens here and highlight ones that are installed
+          puts Formatter.columns(name_matches)
         end
 
         return if remote_matches.empty?
